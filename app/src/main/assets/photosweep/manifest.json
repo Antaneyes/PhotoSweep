@@ -1,0 +1,25 @@
+{
+  "manifest_version": 2,
+  "name": "PhotoSweep Bridge",
+  "version": "0.1.3",
+  "description": "Puente local entre PhotoSweep y Google Photos.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "bridge@photosweep.local"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://photos.google.com/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "https://photos.google.com/*",
+    "https://*.usercontent.google.com/*",
+    "nativeMessaging",
+    "nativeMessagingFromContent",
+    "geckoViewAddons"
+  ]
+}
