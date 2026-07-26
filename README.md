@@ -100,6 +100,36 @@ app/build/outputs/apk/debug/app-debug.apk
 GeckoView hace que la APK de depuración sea grande. Esta variante está limitada
 a `arm64-v8a` para reducir parcialmente su tamaño.
 
+### APK release para compartir
+
+La compilación release requiere un archivo local `signing.properties` (ignorado
+por Git) con estas claves:
+
+```properties
+storeFile=/ruta/segura/photosweep-release.jks
+storePassword=...
+keyAlias=photosweep
+keyPassword=...
+```
+
+Después se genera la APK firmada y optimizada con:
+
+```bash
+./gradlew clean assembleRelease
+```
+
+El archivo para distribuir queda en:
+
+```text
+app/build/outputs/apk/release/app-release.apk
+```
+
+La clave debe conservarse de forma segura: todas las futuras actualizaciones
+distribuidas necesitan estar firmadas con la misma clave. Una instalación
+`debug` existente no se puede actualizar directamente con la APK `release`
+porque sus firmas son diferentes; primero hay que desinstalar la variante
+debug, lo que borra sus datos locales.
+
 ## Instalar mediante ADB
 
 ```bash
