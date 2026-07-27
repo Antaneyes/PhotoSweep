@@ -170,6 +170,7 @@ fun PhotoSweepApp(
                 )
                 Screen.HOME -> HomeScreen(
                     ui = ui,
+                    googleReady = bridgeStatus == BridgeStatus.READY,
                     onScan = viewModel::startScan,
                     onSyncDevice = viewModel::syncDevice,
                     onSelectGoogle = { viewModel.selectSource(MediaSource.GOOGLE_PHOTOS) },
@@ -317,6 +318,7 @@ private fun LoginScreen(
 @Composable
 private fun HomeScreen(
     ui: com.josh.photosweep.UiState,
+    googleReady: Boolean,
     onScan: () -> Unit,
     onSyncDevice: () -> Unit,
     onSelectGoogle: () -> Unit,
@@ -338,10 +340,19 @@ private fun HomeScreen(
                 Text("PhotoSweep", fontSize = 32.sp, fontWeight = FontWeight.Black)
                 Text("Tu fototeca, una decisión cada vez", color = Muted)
             }
-            FilledIconButton(
-                onClick = if (ui.source == MediaSource.DEVICE) onSelectDevice else onLogin
-            ) {
-                Icon(Icons.Rounded.Refresh, contentDescription = "Cuenta")
+            if (ui.source == MediaSource.DEVICE || googleReady) {
+                FilledIconButton(
+                    onClick = if (ui.source == MediaSource.DEVICE) onSelectDevice else onLogin
+                ) {
+                    Icon(
+                        Icons.Rounded.Refresh,
+                        contentDescription = if (ui.source == MediaSource.DEVICE) {
+                            "Actualizar acceso"
+                        } else {
+                            "Cuenta de Google Photos"
+                        }
+                    )
+                }
             }
         }
 
@@ -377,6 +388,22 @@ private fun HomeScreen(
                     color = Sand,
                     fontSize = 12.sp
                 )
+            }
+        }
+        if (ui.source == MediaSource.GOOGLE_PHOTOS && !googleReady) {
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onLogin,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Mint,
+                    contentColor = Ink
+                )
+            ) {
+                Text("Iniciar sesión en Google Photos", fontWeight = FontWeight.Bold)
             }
         }
 
@@ -426,6 +453,7 @@ private fun HomeScreen(
         } else {
             Button(
                 onClick = if (ui.source == MediaSource.DEVICE) onSyncDevice else onScan,
+                enabled = ui.source == MediaSource.DEVICE || googleReady,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
