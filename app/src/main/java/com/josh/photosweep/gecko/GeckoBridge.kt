@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.josh.photosweep.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import org.mozilla.geckoview.GeckoResult
@@ -27,7 +28,7 @@ class GeckoBridge(context: Context) {
     private val runtime = GeckoRuntime.create(
         appContext,
         GeckoRuntimeSettings.Builder()
-            .consoleOutput(true)
+            .consoleOutput(BuildConfig.DEBUG)
             .build()
     )
     val session = GeckoSession()

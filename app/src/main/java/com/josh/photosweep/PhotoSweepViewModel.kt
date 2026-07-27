@@ -216,6 +216,10 @@ class PhotoSweepViewModel(
                     scanComplete = true,
                     scanCount = message.optInt("count")
                 )
+                // La primera carga de HOME puede ocurrir antes de que exista ningún
+                // elemento local y dejar fijado un mazo vacío para toda la sesión.
+                // Tras indexar hay que sortearlo de nuevo con la fototeca actual.
+                sessionDeckKeys = null
                 refreshLists(Screen.HOME)
             }
 
@@ -306,13 +310,16 @@ class PhotoSweepViewModel(
         screen: Screen,
         clearUndo: Boolean = false
     ) = withContext(Dispatchers.IO) {
-        val deckKeys = sessionDeckKeys ?: database
-            .randomList(ReviewStatus.UNSEEN)
-            .map(MediaItem::mediaKey)
-            .also { sessionDeckKeys = it }
         val unseenByKey = database
             .list(ReviewStatus.UNSEEN, Int.MAX_VALUE)
             .associateBy(MediaItem::mediaKey)
+        var deckKeys = sessionDeckKeys
+        if (deckKeys == null || deckKeys.isEmpty() && unseenByKey.isNotEmpty()) {
+            deckKeys = database
+                .randomList(ReviewStatus.UNSEEN)
+                .map(MediaItem::mediaKey)
+            sessionDeckKeys = deckKeys
+        }
         val deck = deckKeys.mapNotNull(unseenByKey::get)
         val basket = database.list(ReviewStatus.BASKET) + database.list(ReviewStatus.FAILED)
         val kept = database.list(ReviewStatus.KEPT)

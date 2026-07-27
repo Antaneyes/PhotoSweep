@@ -1,14 +1,21 @@
 # PhotoSweep
 
-PhotoSweep es una aplicación Android privada para revisar una fototeca de
-Google Photos con una interacción similar a Tinder: deslizar para conservar o
-añadir a una cesta y confirmar después el envío de esa cesta a la papelera.
+PhotoSweep es una aplicación Android experimental y de código abierto para
+revisar una fototeca de Google Photos con una interacción de tarjetas: deslizar
+para conservar o añadir a una cesta y confirmar después su envío a la papelera.
 
-La versión actual es **0.2.0** y está orientada a dispositivos `arm64-v8a`.
+La versión actual es **0.2.1**. Requiere Android 15 o posterior y un dispositivo
+`arm64-v8a`.
+
+> [!WARNING]
+> PhotoSweep no es un producto oficial de Google y utiliza endpoints web
+> internos y no documentados. Google Photos puede cambiar sin previo aviso y
+> romper la aplicación. Prueba siempre los borrados con contenido desechable y
+> úsala bajo tu responsabilidad.
 
 ## Características
 
-- Inicio de sesión de Google dentro de un perfil privado de GeckoView.
+- Inicio de sesión de Google dentro de un perfil aislado de GeckoView.
 - El navegador permanece oculto después de autenticar la cuenta.
 - Indexación paginada de toda la fototeca de Google Photos.
 - Mazo de hasta 10.000 elementos pendientes, seleccionado aleatoriamente en
@@ -30,6 +37,20 @@ La versión actual es **0.2.0** y está orientada a dispositivos `arm64-v8a`.
   la aplicación.
 - Splash y pantalla de preparación nativos con el diseño oscuro de PhotoSweep.
 - Sin backend, root, servicio de Accesibilidad ni navegador externo.
+
+## Privacidad y confianza
+
+PhotoSweep no incluye backend, analítica, publicidad ni telemetría. La sesión de
+Google, el índice y las decisiones se guardan en el almacenamiento privado de la
+aplicación y las copias de seguridad de Android están desactivadas. Las
+credenciales se introducen directamente en la página de Google cargada por
+GeckoView; el código de PhotoSweep no las recibe ni las almacena.
+
+El navegador interno usa modo escritorio porque la integración depende de la
+web completa de Google Photos. Por ello, Google puede mostrar una alerta de
+inicio de sesión desde **Linux**, aunque la aplicación se esté ejecutando en un
+móvil Android. Consulta [PRIVACY.md](PRIVACY.md) para ver el flujo de datos
+completo.
 
 ## Qué ocurre al borrar
 
@@ -70,14 +91,15 @@ internas y no documentadas de Google Photos (`EzkLib`, `VrseUb` y `XwAOJf`).
 
 Por ello:
 
-- es un proyecto privado y experimental;
+- es un proyecto experimental y sin garantía de funcionamiento;
 - una actualización de Google Photos puede romper la integración;
-- no debe publicarse en Play Store como si usara una API oficial;
+- no debe presentarse ni publicarse como una integración oficial;
+- su uso puede estar sujeto a las condiciones de Google;
 - conviene probar cualquier versión nueva con elementos desechables.
 
 ## Requisitos
 
-- JDK 17 o superior (el entorno de desarrollo actual usa JDK 21).
+- JDK 21.
 - Android SDK 36 o superior.
 - Android con arquitectura `arm64-v8a`.
 - Conexión a Internet.
@@ -88,7 +110,7 @@ Por ello:
 El proyecto incluye Gradle Wrapper:
 
 ```bash
-./gradlew assembleDebug test lint
+./gradlew test lint assembleDebug
 ```
 
 La APK resultante se genera en:
@@ -100,10 +122,13 @@ app/build/outputs/apk/debug/app-debug.apk
 GeckoView hace que la APK de depuración sea grande. Esta variante está limitada
 a `arm64-v8a` para reducir parcialmente su tamaño.
 
-### APK release para compartir
+La integración continua de GitHub ejecuta estos mismos controles, sin utilizar
+ninguna clave privada.
 
-La compilación release requiere un archivo local `signing.properties` (ignorado
-por Git) con estas claves:
+### APK release firmada
+
+Cada persona que distribuya la aplicación debe utilizar su propia clave. Copia
+`signing.properties.example` como `signing.properties` y completa localmente:
 
 ```properties
 storeFile=/ruta/segura/photosweep-release.jks
@@ -111,6 +136,10 @@ storePassword=...
 keyAlias=photosweep
 keyPassword=...
 ```
+
+Tanto `signing.properties` como `*.jks` y `*.keystore` están ignorados por Git.
+No subas nunca estos archivos ni sus contraseñas a GitHub, issues, Actions o
+Releases.
 
 Después se genera la APK firmada y optimizada con:
 
@@ -124,11 +153,10 @@ El archivo para distribuir queda en:
 app/build/outputs/apk/release/app-release.apk
 ```
 
-La clave debe conservarse de forma segura: todas las futuras actualizaciones
-distribuidas necesitan estar firmadas con la misma clave. Una instalación
-`debug` existente no se puede actualizar directamente con la APK `release`
-porque sus firmas son diferentes; primero hay que desinstalar la variante
-debug, lo que borra sus datos locales.
+La clave debe conservarse fuera del repositorio y con una copia de seguridad
+segura: todas las futuras actualizaciones distribuidas necesitan la misma
+firma. Una instalación `debug` no se puede actualizar directamente con una APK
+`release` porque sus firmas son diferentes.
 
 ## Instalar mediante ADB
 
@@ -157,6 +185,10 @@ sesión de Google, pero no modifica las fotos almacenadas en Google Photos.
 6. Pulsa **Empezar a deslizar**.
 7. Revisa la cesta antes de confirmar cualquier movimiento a la papelera.
 
+Durante el inicio de sesión, Google puede notificar un acceso desde Linux debido
+al modo escritorio de GeckoView. Comprueba que la hora y ubicación aproximada
+corresponden al propio dispositivo.
+
 ## Prueba segura recomendada
 
 1. Crea y respalda una foto y un vídeo desechables.
@@ -169,3 +201,17 @@ sesión de Google, pero no modifica las fotos almacenadas en Google Photos.
 
 No se recomienda probar borrados grandes después de cambios en el puente web
 sin completar antes esta secuencia.
+
+## Colaborar
+
+Las contribuciones son bienvenidas. Lee [CONTRIBUTING.md](CONTRIBUTING.md) y no
+incluyas fotografías, identificadores de cuenta, cookies, credenciales ni
+capturas personales en issues o pull requests. Los problemas de seguridad deben
+seguir el proceso de [SECURITY.md](SECURITY.md).
+
+## Licencia
+
+El código propio de PhotoSweep se distribuye bajo la [licencia MIT](LICENSE).
+Google Photos y las dependencias de terceros conservan sus respectivas marcas,
+licencias y condiciones. PhotoSweep no está afiliada, respaldada ni aprobada
+por Google.

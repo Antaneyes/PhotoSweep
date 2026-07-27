@@ -18,7 +18,6 @@
     if (!data) throw new Error("Google Photos todavía no ha inicializado la sesión");
     return {
       rapt: data.Dbw5Ud,
-      account: data.oPEP7c,
       sid: data.FdrFJe,
       build: data.cfb2h,
       path: data.eptZe,
@@ -212,8 +211,8 @@
   });
 
   try {
-    const g = globals();
-    send("ready", { account: String(g.account ?? ""), path: location.pathname });
+    globals();
+    send("ready", { path: location.pathname });
   } catch (error) {
     send("pageLoaded", { path: location.pathname, message: String(error?.message || error) });
   }

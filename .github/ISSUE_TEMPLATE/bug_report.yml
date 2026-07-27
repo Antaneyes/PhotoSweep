@@ -1,0 +1,42 @@
+name: Informe de error
+description: Comunica un fallo reproducible sin incluir datos personales.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No adjuntes fotos, correos, cookies, tokens, URLs autenticadas ni capturas con información personal. Para vulnerabilidades, consulta SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Versión o commit
+      placeholder: "0.2.1 o SHA del commit"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Dispositivo y Android
+      placeholder: "Modelo, Android 15/16…"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Qué ocurrió
+      description: Explica el resultado observado y el esperado.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      description: Usa únicamente datos ficticios o anonimizados.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Comprobaciones realizadas
+      placeholder: "Reinicio, resincronización, prueba con elemento desechable…"

@@ -35,6 +35,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -43,9 +46,6 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.Undo
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -278,6 +278,16 @@ private fun LoginScreen(
                 Icon(Icons.Rounded.Refresh, contentDescription = "Recargar")
             }
         }
+        Text(
+            "Google puede identificar este navegador interno como Linux porque usa el modo " +
+                "escritorio. La sesión permanece guardada únicamente en este dispositivo.",
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(SurfaceHigh)
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            color = Muted,
+            fontSize = 12.sp
+        )
         AndroidView(
             modifier = Modifier
                 .fillMaxWidth()
@@ -539,7 +549,7 @@ private fun SwipeScreen(
                 Icon(Icons.Rounded.DeleteOutline, contentDescription = "A la cesta", Modifier.size(30.dp))
             }
             IconButton(onClick = onUndo, enabled = canUndo) {
-                Icon(Icons.Rounded.Undo, contentDescription = "Deshacer")
+                Icon(Icons.AutoMirrored.Rounded.Undo, contentDescription = "Deshacer")
             }
             FilledIconButton(
                 onClick = { item?.let { onReview(it, ReviewStatus.KEPT) } },
@@ -663,7 +673,11 @@ private fun SwipeCard(
                         .background(Color(0xB307110E), CircleShape)
                 ) {
                     Icon(
-                        if (videoMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
+                        if (videoMuted) {
+                            Icons.AutoMirrored.Rounded.VolumeOff
+                        } else {
+                            Icons.AutoMirrored.Rounded.VolumeUp
+                        },
                         contentDescription = if (videoMuted) "Activar sonido" else "Silenciar"
                     )
                 }
@@ -911,7 +925,10 @@ private fun BasketScreen(
                                 .align(Alignment.TopEnd)
                                 .background(Color(0xB307110E), CircleShape)
                         ) {
-                            Icon(Icons.Rounded.Undo, contentDescription = "Sacar de la cesta")
+                            Icon(
+                                Icons.AutoMirrored.Rounded.Undo,
+                                contentDescription = "Sacar de la cesta"
+                            )
                         }
                         if (item.isVideo) {
                             Icon(

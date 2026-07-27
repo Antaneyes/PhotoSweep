@@ -5,3 +5,12 @@
 *.iml
 /signing.properties
 *.jks
+*.keystore
+*.apk
+*.aab
+/.cxx/
+/.externalNativeBuild/
+/captures/
+.DS_Store
+.env
+.env.*

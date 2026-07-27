@@ -1,0 +1,6 @@
+# Copia este archivo como signing.properties y completa los valores localmente.
+# No subas signing.properties ni la clave privada al repositorio.
+storeFile=/ruta/absoluta/segura/photosweep-release.jks
+storePassword=CAMBIAR
+keyAlias=photosweep
+keyPassword=CAMBIAR
