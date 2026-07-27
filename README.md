@@ -4,9 +4,7 @@ PhotoSweep es una aplicación Android experimental y de código abierto para
 revisar una fototeca de Google Photos con una interacción de tarjetas: deslizar
 para conservar o añadir a una cesta y confirmar después su envío a la papelera.
 
-La versión actual es **0.2.2**. Requiere Android 8.0 o posterior. La APK oficial
-se distribuye para dispositivos `arm64-v8a`, la arquitectura habitual en
-móviles Android modernos.
+Requiere Android 8.0 o posterior.
 
 > [!WARNING]
 > PhotoSweep no es un producto oficial de Google y utiliza endpoints web
@@ -103,13 +101,12 @@ Por ello:
 - JDK 21.
 - Android SDK 36 o superior.
 - Android 8.0 (API 26) o posterior.
-- Arquitectura `arm64-v8a` para la APK oficial.
 - Conexión a Internet.
 - Una cuenta de Google con Google Photos.
 
 La compilación y las dependencias son compatibles desde API 26. La ejecución
-completa se ha verificado en un dispositivo `arm64-v8a` con Android 17; se
-agradecen informes de prueba de versiones anteriores sin datos personales.
+completa se ha verificado en un dispositivo con Android 17; se agradecen
+informes de prueba de versiones anteriores sin datos personales.
 
 ## Compilar y verificar
 
@@ -138,8 +135,7 @@ sin modificar el proyecto:
 ```
 
 El workflow manual **Build other architectures** de GitHub Actions compila las
-tres variantes debug como artefactos temporales. Las Releases oficiales siguen
-publicando únicamente `arm64-v8a`.
+tres variantes debug como artefactos temporales.
 
 La integración continua de GitHub ejecuta estos mismos controles, sin utilizar
 ninguna clave privada.
