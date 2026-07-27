@@ -11,14 +11,14 @@ body:
     id: version
     attributes:
       label: Versión o commit
-      placeholder: "0.2.1 o SHA del commit"
+      placeholder: "0.2.2 o SHA del commit"
     validations:
       required: true
   - type: input
     id: device
     attributes:
       label: Dispositivo y Android
-      placeholder: "Modelo, Android 15/16…"
+      placeholder: "Modelo, Android 8/15/16/17…"
     validations:
       required: true
   - type: textarea

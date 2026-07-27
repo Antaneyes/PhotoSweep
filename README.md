@@ -4,8 +4,9 @@ PhotoSweep es una aplicación Android experimental y de código abierto para
 revisar una fototeca de Google Photos con una interacción de tarjetas: deslizar
 para conservar o añadir a una cesta y confirmar después su envío a la papelera.
 
-La versión actual es **0.2.1**. Requiere Android 15 o posterior y un dispositivo
-`arm64-v8a`.
+La versión actual es **0.2.2**. Requiere Android 8.0 o posterior. La APK oficial
+se distribuye para dispositivos `arm64-v8a`, la arquitectura habitual en
+móviles Android modernos.
 
 > [!WARNING]
 > PhotoSweep no es un producto oficial de Google y utiliza endpoints web
@@ -101,9 +102,14 @@ Por ello:
 
 - JDK 21.
 - Android SDK 36 o superior.
-- Android con arquitectura `arm64-v8a`.
+- Android 8.0 (API 26) o posterior.
+- Arquitectura `arm64-v8a` para la APK oficial.
 - Conexión a Internet.
 - Una cuenta de Google con Google Photos.
+
+La compilación y las dependencias son compatibles desde API 26. La ejecución
+completa se ha verificado en un dispositivo `arm64-v8a` con Android 17; se
+agradecen informes de prueba de versiones anteriores sin datos personales.
 
 ## Compilar y verificar
 
@@ -120,7 +126,20 @@ app/build/outputs/apk/debug/app-debug.apk
 ```
 
 GeckoView hace que la APK de depuración sea grande. Esta variante está limitada
-a `arm64-v8a` para reducir parcialmente su tamaño.
+a `arm64-v8a` de forma predeterminada para reducir parcialmente su tamaño.
+
+GeckoView también incluye binarios para `armeabi-v7a` y `x86_64`. Quien
+necesite una compilación de desarrollo para otra arquitectura puede indicarla
+sin modificar el proyecto:
+
+```bash
+./gradlew assembleDebug -PtargetAbi=armeabi-v7a
+./gradlew assembleDebug -PtargetAbi=x86_64
+```
+
+El workflow manual **Build other architectures** de GitHub Actions compila las
+tres variantes debug como artefactos temporales. Las Releases oficiales siguen
+publicando únicamente `arm64-v8a`.
 
 La integración continua de GitHub ejecuta estos mismos controles, sin utilizar
 ninguna clave privada.

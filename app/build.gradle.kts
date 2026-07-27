@@ -12,6 +12,11 @@ val signingProperties = Properties().apply {
         signingPropertiesFile.inputStream().use(::load)
     }
 }
+val supportedAbis = setOf("arm64-v8a", "armeabi-v7a", "x86_64")
+val targetAbi = providers.gradleProperty("targetAbi").orElse("arm64-v8a").get()
+require(targetAbi in supportedAbis) {
+    "Arquitectura no compatible: $targetAbi. Usa una de: ${supportedAbis.joinToString()}"
+}
 
 android {
     namespace = "com.josh.photosweep"
@@ -19,15 +24,15 @@ android {
 
     defaultConfig {
         applicationId = "com.josh.photosweep"
-        minSdk = 35
+        minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.2.1"
+        versionCode = 4
+        versionName = "0.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += targetAbi
         }
     }
 
