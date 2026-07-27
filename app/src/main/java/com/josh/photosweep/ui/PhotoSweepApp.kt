@@ -100,6 +100,7 @@ import com.josh.photosweep.PhotoSweepViewModel
 import com.josh.photosweep.R
 import com.josh.photosweep.Screen
 import com.josh.photosweep.data.MediaItem
+import com.josh.photosweep.data.MediaSource
 import com.josh.photosweep.data.ReviewStatus
 import com.josh.photosweep.gecko.BridgeStatus
 import com.josh.photosweep.gecko.GeckoBridge
@@ -110,7 +111,12 @@ import kotlin.math.abs
 import kotlin.math.max
 
 @Composable
-fun PhotoSweepApp(viewModel: PhotoSweepViewModel, bridge: GeckoBridge) {
+fun PhotoSweepApp(
+    viewModel: PhotoSweepViewModel,
+    bridge: GeckoBridge,
+    onSelectDevice: () -> Unit,
+    onTrashDevice: (List<MediaItem>) -> Unit
+) {
     val ui by viewModel.uiState.collectAsState()
     val bridgeStatus by viewModel.bridgeStatus.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -165,6 +171,9 @@ fun PhotoSweepApp(viewModel: PhotoSweepViewModel, bridge: GeckoBridge) {
                 Screen.HOME -> HomeScreen(
                     ui = ui,
                     onScan = viewModel::startScan,
+                    onSyncDevice = viewModel::syncDevice,
+                    onSelectGoogle = { viewModel.selectSource(MediaSource.GOOGLE_PHOTOS) },
+                    onSelectDevice = onSelectDevice,
                     onSwipe = { viewModel.show(Screen.SWIPE) },
                     onBasket = { viewModel.show(Screen.BASKET) },
                     onKept = { viewModel.show(Screen.KEPT) },
@@ -192,7 +201,11 @@ fun PhotoSweepApp(viewModel: PhotoSweepViewModel, bridge: GeckoBridge) {
                     onReturn = viewModel::returnToDeck,
                     onThumbnail = viewModel::requestThumbnail,
                     onPreview = viewModel::requestPreview,
-                    onTrash = viewModel::trashBasket
+                    onTrash = {
+                        if (ui.source == MediaSource.DEVICE) onTrashDevice(ui.basket)
+                        else viewModel.trashGoogleBasket()
+                    },
+                    source = ui.source
                 )
                 Screen.KEPT -> KeptScreen(
                     items = ui.kept,
@@ -305,6 +318,9 @@ private fun LoginScreen(
 private fun HomeScreen(
     ui: com.josh.photosweep.UiState,
     onScan: () -> Unit,
+    onSyncDevice: () -> Unit,
+    onSelectGoogle: () -> Unit,
+    onSelectDevice: () -> Unit,
     onSwipe: () -> Unit,
     onBasket: () -> Unit,
     onKept: () -> Unit,
@@ -322,12 +338,49 @@ private fun HomeScreen(
                 Text("PhotoSweep", fontSize = 32.sp, fontWeight = FontWeight.Black)
                 Text("Tu fototeca, una decisión cada vez", color = Muted)
             }
-            FilledIconButton(onClick = onLogin) {
+            FilledIconButton(
+                onClick = if (ui.source == MediaSource.DEVICE) onSelectDevice else onLogin
+            ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "Cuenta")
             }
         }
 
-        Spacer(Modifier.height(34.dp))
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = onSelectGoogle,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (ui.source == MediaSource.GOOGLE_PHOTOS) Mint else SurfaceHigh,
+                    contentColor = if (ui.source == MediaSource.GOOGLE_PHOTOS) Ink else Sand
+                )
+            ) { Text("Google Photos") }
+            Button(
+                onClick = onSelectDevice,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (ui.source == MediaSource.DEVICE) Mint else SurfaceHigh,
+                    contentColor = if (ui.source == MediaSource.DEVICE) Ink else Sand
+                )
+            ) { Text("Este dispositivo") }
+        }
+        if (ui.source == MediaSource.DEVICE && ui.localAccessPartial) {
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                onClick = onSelectDevice,
+                color = SurfaceHigh,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(
+                    "Acceso limitado: toca para elegir más fotos y vídeos",
+                    modifier = Modifier.padding(12.dp),
+                    color = Sand,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
         Text("ESTADO", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -358,7 +411,11 @@ private fun HomeScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
-                        Text("Explorando toda la fototeca", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (ui.source == MediaSource.DEVICE) "Leyendo la galería del dispositivo"
+                            else "Explorando toda la fototeca",
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Spacer(Modifier.height(12.dp))
                     Text("${ui.scanCount} elementos encontrados", color = Muted)
@@ -368,7 +425,7 @@ private fun HomeScreen(
             }
         } else {
             Button(
-                onClick = onScan,
+                onClick = if (ui.source == MediaSource.DEVICE) onSyncDevice else onScan,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -376,7 +433,11 @@ private fun HomeScreen(
             ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null)
                 Spacer(Modifier.width(10.dp))
-                Text(if (ui.scanComplete) "Sincronizar de nuevo" else "Indexar toda la fototeca")
+                Text(
+                    if (ui.source == MediaSource.DEVICE) "Sincronizar galería"
+                    else if (ui.scanComplete) "Sincronizar de nuevo"
+                    else "Indexar toda la fototeca"
+                )
             }
         }
 
@@ -626,11 +687,11 @@ private fun SwipeCard(
         color = Surface
     ) {
         Box(Modifier.fillMaxSize()) {
-            if (item.isVideo && !item.streamUrl.isNullOrBlank()) {
-                VideoPlayer(item.streamUrl, muted = videoMuted)
+            if (item.isVideo && !item.playableUri.isNullOrBlank()) {
+                VideoPlayer(item.playableUri!!, muted = videoMuted)
             } else {
                 AsyncImage(
-                    model = thumbnailBytes,
+                    model = thumbnailBytes ?: item.imageModel,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
@@ -664,7 +725,7 @@ private fun SwipeCard(
                         }
                 )
             }
-            if (item.isVideo && !item.streamUrl.isNullOrBlank()) {
+            if (item.isVideo && !item.playableUri.isNullOrBlank()) {
                 IconButton(
                     onClick = { videoMuted = !videoMuted },
                     modifier = Modifier
@@ -701,7 +762,7 @@ private fun SwipeCard(
                 if (item.isVideo) {
                     TextButton(onClick = onPreview) {
                         Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                        Text(if (item.streamUrl == null) "Reproducir vídeo" else "Vídeo")
+                        Text(if (item.playableUri == null) "Reproducir vídeo" else "Vídeo")
                     }
                 }
                 Text(
@@ -826,7 +887,7 @@ private fun KeptScreen(
                             .clickable { selectedIndex = index }
                     ) {
                         AsyncImage(
-                            model = thumbnailCache[item.mediaKey],
+                            model = thumbnailCache[item.mediaKey] ?: item.imageModel,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -866,7 +927,8 @@ private fun BasketScreen(
     onReturn: (MediaItem) -> Unit,
     onThumbnail: (MediaItem) -> Unit,
     onPreview: (MediaItem) -> Unit,
-    onTrash: () -> Unit
+    onTrash: () -> Unit,
+    source: MediaSource
 ) {
     var confirm by remember { mutableStateOf(false) }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
@@ -914,7 +976,7 @@ private fun BasketScreen(
                             .clickable { selectedIndex = index }
                     ) {
                         AsyncImage(
-                            model = thumbnailCache[item.mediaKey],
+                            model = thumbnailCache[item.mediaKey] ?: item.imageModel,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -958,7 +1020,14 @@ private fun BasketScreen(
                     )
                 } else {
                     Text(
-                        "Nada se borra hasta confirmar. Google Photos conservará los elementos en su papelera.",
+                        when {
+                            source == MediaSource.GOOGLE_PHOTOS ->
+                                "Nada se borra hasta confirmar. Google Photos conservará los elementos en su papelera."
+                            android.os.Build.VERSION.SDK_INT >= 30 ->
+                                "Nada se borra hasta confirmar. Android enviará los elementos a su papelera."
+                            else ->
+                                "En esta versión de Android los elementos se borrarán definitivamente."
+                        },
                         color = Muted,
                         fontSize = 12.sp
                     )
@@ -987,7 +1056,16 @@ private fun BasketScreen(
             icon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Coral) },
             title = { Text("¿Mover ${items.size} elementos?") },
             text = {
-                Text("Esta acción usa una API no oficial. Los elementos se moverán a la papelera de Google Photos, no se eliminarán permanentemente.")
+                Text(
+                    when {
+                        source == MediaSource.GOOGLE_PHOTOS ->
+                            "Esta acción usa una API no oficial. Los elementos se moverán a la papelera de Google Photos."
+                        android.os.Build.VERSION.SDK_INT >= 30 ->
+                            "Android solicitará permiso para mover estos elementos a la papelera del dispositivo."
+                        else ->
+                            "Esta versión de Android no ofrece una papelera estándar. Los elementos se borrarán definitivamente."
+                    }
+                )
             },
             confirmButton = {
                 Button(
@@ -1034,7 +1112,7 @@ private fun MediaViewer(
     LaunchedEffect(pagerState.currentPage, items) {
         val current = items[pagerState.currentPage]
         onThumbnail(current)
-        if (current.isVideo && current.streamUrl.isNullOrBlank()) onPreview(current)
+        if (current.isVideo && current.playableUri.isNullOrBlank()) onPreview(current)
         listOf(pagerState.currentPage - 1, pagerState.currentPage + 1)
             .filter { it in items.indices }
             .forEach { onThumbnail(items[it]) }
@@ -1105,11 +1183,11 @@ private fun ViewerPage(item: MediaItem, thumbnailBytes: ByteArray?) {
                 }
             }
     ) {
-        if (item.isVideo && !item.streamUrl.isNullOrBlank()) {
-            VideoPlayer(item.streamUrl, muted = false)
+        if (item.isVideo && !item.playableUri.isNullOrBlank()) {
+            VideoPlayer(item.playableUri!!, muted = false)
         } else {
             AsyncImage(
-                model = thumbnailBytes,
+                model = thumbnailBytes ?: item.imageModel,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier

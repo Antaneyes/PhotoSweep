@@ -1,11 +1,16 @@
 package com.josh.photosweep
 
 import android.app.Application
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.josh.photosweep.data.MediaDatabase
 import com.josh.photosweep.data.MediaItem
+import com.josh.photosweep.data.MediaSource
+import com.josh.photosweep.data.LocalMediaRepository
 import com.josh.photosweep.data.ReviewStatus
 import com.josh.photosweep.gecko.BridgeStatus
 import com.josh.photosweep.gecko.GeckoBridge
@@ -41,17 +46,21 @@ data class UiState(
     val thumbnailKey: String? = null,
     val thumbnailBytes: ByteArray? = null,
     val thumbnailCache: Map<String, ByteArray> = emptyMap(),
-    val message: String? = null
+    val message: String? = null,
+    val source: MediaSource = MediaSource.GOOGLE_PHOTOS,
+    val localAccessPartial: Boolean = false
 )
 
 class PhotoSweepViewModel(
     application: Application,
     private val bridge: GeckoBridge
 ) : AndroidViewModel(application) {
-    private val reviewHistory = ArrayDeque<MediaItem>()
+    private val reviewHistory = MediaSource.entries.associateWith { ArrayDeque<MediaItem>() }
     private val thumbnailRequests = mutableSetOf<String>()
-    private var sessionDeckKeys: List<String>? = null
+    private val sessionDeckKeys = mutableMapOf<MediaSource, List<String>>()
     private val database = MediaDatabase(application)
+    private val localMedia = LocalMediaRepository(application)
+    private val preferences = application.getSharedPreferences("photosweep", 0)
     private val _uiState = MutableStateFlow(UiState())
     val uiState = _uiState.asStateFlow()
     val bridgeStatus: StateFlow<BridgeStatus> = bridge.status.stateIn(
@@ -61,6 +70,12 @@ class PhotoSweepViewModel(
     )
 
     init {
+        val savedSource = MediaSource.from(preferences.getInt("media_source", 0))
+        _uiState.value = _uiState.value.copy(source = savedSource)
+        viewModelScope.launch {
+            refreshLists(Screen.HOME)
+            if (savedSource == MediaSource.DEVICE && hasLocalAccess()) syncDevice()
+        }
         viewModelScope.launch {
             delay(6_000)
             if (_uiState.value.screen == Screen.LOADING) {
@@ -73,9 +88,7 @@ class PhotoSweepViewModel(
         viewModelScope.launch {
             bridge.status.collect { status ->
                 if (status == BridgeStatus.READY) {
-                    if (_uiState.value.screen == Screen.LOGIN ||
-                        _uiState.value.screen == Screen.LOADING
-                    ) {
+                    if (_uiState.value.screen == Screen.LOGIN) {
                         refreshLists(Screen.HOME)
                     }
                 }
@@ -95,6 +108,39 @@ class PhotoSweepViewModel(
 
     fun reloadLogin() = bridge.reload()
 
+    fun selectSource(source: MediaSource) {
+        preferences.edit().putInt("media_source", source.value).apply()
+        _uiState.value = _uiState.value.copy(source = source, scanComplete = false)
+        viewModelScope.launch { refreshLists(Screen.HOME) }
+    }
+
+    fun syncDevice() {
+        _uiState.value = _uiState.value.copy(scanning = true, scanCount = 0, message = null)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val items = localMedia.scan()
+                database.markSourceUnavailable(MediaSource.DEVICE)
+                database.upsert(items)
+                sessionDeckKeys.remove(MediaSource.DEVICE)
+                items.size
+            }.onSuccess { count ->
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        scanning = false, scanComplete = true, scanCount = count
+                    )
+                    refreshLists(Screen.HOME)
+                }
+            }.onFailure { error ->
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        scanning = false,
+                        message = "No se pudo leer la galería: ${error.message}"
+                    )
+                }
+            }
+        }
+    }
+
     fun startScan() {
         _uiState.value = _uiState.value.copy(
             scanning = true,
@@ -108,12 +154,13 @@ class PhotoSweepViewModel(
     fun review(item: MediaItem, status: ReviewStatus) {
         viewModelScope.launch(Dispatchers.IO) {
             database.updateStatus(item.mediaKey, status)
+            val source = item.source
             withContext(Dispatchers.Main) {
-                reviewHistory.addLast(item)
+                reviewHistory.getValue(source).addLast(item)
                 val current = _uiState.value
                 _uiState.value = current.copy(
                     deck = current.deck.filterNot { it.mediaKey == item.mediaKey },
-                    counts = database.counts(),
+                    counts = database.counts(source),
                     lastAction = item.mediaKey to item.status
                 )
             }
@@ -121,10 +168,11 @@ class PhotoSweepViewModel(
     }
 
     fun undo() {
-        val item = reviewHistory.removeLastOrNull() ?: return
+        val history = reviewHistory.getValue(_uiState.value.source)
+        val item = history.removeLastOrNull() ?: return
         viewModelScope.launch(Dispatchers.IO) {
             database.updateStatus(item.mediaKey, item.status)
-            val counts = database.counts()
+            val counts = database.counts(item.source)
             withContext(Dispatchers.Main) {
                 val current = _uiState.value
                 _uiState.value = current.copy(
@@ -132,7 +180,7 @@ class PhotoSweepViewModel(
                         it.mediaKey == item.mediaKey
                     },
                     counts = counts,
-                    lastAction = reviewHistory.lastOrNull()?.let {
+                    lastAction = history.lastOrNull()?.let {
                         it.mediaKey to it.status
                     }
                 )
@@ -147,16 +195,19 @@ class PhotoSweepViewModel(
         }
     }
 
-    fun requestPreview(item: MediaItem) = bridge.preview(item.mediaKey)
+    fun requestPreview(item: MediaItem) {
+        if (item.source == MediaSource.GOOGLE_PHOTOS) bridge.preview(item.mediaKey)
+    }
 
     fun requestThumbnail(item: MediaItem) {
+        if (item.source == MediaSource.DEVICE) return
         if (_uiState.value.thumbnailCache.containsKey(item.mediaKey) ||
             !thumbnailRequests.add(item.mediaKey)
         ) return
         bridge.thumbnail(item.mediaKey, item.thumbnailUrl)
     }
 
-    fun trashBasket() {
+    fun trashGoogleBasket() {
         val basket = _uiState.value.basket
         if (basket.isEmpty() || _uiState.value.trashing) return
         _uiState.value = _uiState.value.copy(
@@ -170,13 +221,47 @@ class PhotoSweepViewModel(
         )
     }
 
+    fun completeLocalTrash(succeeded: List<String>, failed: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.updateStatuses(succeeded, ReviewStatus.TRASHED)
+            database.updateStatuses(failed, ReviewStatus.FAILED)
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    trashing = false,
+                    trashProgress = null,
+                    message = if (failed.isEmpty()) {
+                        "${succeeded.size} elementos procesados"
+                    } else {
+                        "${succeeded.size} eliminados; ${failed.size} siguen en la cesta"
+                    }
+                )
+                refreshLists(Screen.BASKET)
+            }
+        }
+    }
+
+    fun setLocalTrashing(active: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            trashing = active,
+            trashProgress = if (active) 0 to _uiState.value.basket.size else null
+        )
+    }
+
+    fun setLocalAccessPartial(partial: Boolean) {
+        _uiState.value = _uiState.value.copy(localAccessPartial = partial)
+    }
+
+    fun showMessage(message: String) {
+        _uiState.value = _uiState.value.copy(message = message)
+    }
+
     fun clearMessage() {
         _uiState.value = _uiState.value.copy(message = null)
     }
 
     fun resetHistory() {
         viewModelScope.launch(Dispatchers.IO) {
-            database.resetHistory()
+            database.resetHistory(_uiState.value.source)
             refreshLists(Screen.HOME, clearUndo = true)
         }
     }
@@ -219,7 +304,7 @@ class PhotoSweepViewModel(
                 // La primera carga de HOME puede ocurrir antes de que exista ningún
                 // elemento local y dejar fijado un mazo vacío para toda la sesión.
                 // Tras indexar hay que sortearlo de nuevo con la fototeca actual.
-                sessionDeckKeys = null
+                sessionDeckKeys.remove(MediaSource.GOOGLE_PHOTOS)
                 refreshLists(Screen.HOME)
             }
 
@@ -310,22 +395,24 @@ class PhotoSweepViewModel(
         screen: Screen,
         clearUndo: Boolean = false
     ) = withContext(Dispatchers.IO) {
+        val source = _uiState.value.source
         val unseenByKey = database
-            .list(ReviewStatus.UNSEEN, Int.MAX_VALUE)
+            .list(source, ReviewStatus.UNSEEN, Int.MAX_VALUE)
             .associateBy(MediaItem::mediaKey)
-        var deckKeys = sessionDeckKeys
+        var deckKeys = sessionDeckKeys[source]
         if (deckKeys == null || deckKeys.isEmpty() && unseenByKey.isNotEmpty()) {
             deckKeys = database
-                .randomList(ReviewStatus.UNSEEN)
+                .randomList(source, ReviewStatus.UNSEEN)
                 .map(MediaItem::mediaKey)
-            sessionDeckKeys = deckKeys
+            sessionDeckKeys[source] = deckKeys
         }
         val deck = deckKeys.mapNotNull(unseenByKey::get)
-        val basket = database.list(ReviewStatus.BASKET) + database.list(ReviewStatus.FAILED)
-        val kept = database.list(ReviewStatus.KEPT)
-        val counts = database.counts()
+        val basket = database.list(source, ReviewStatus.BASKET) +
+            database.list(source, ReviewStatus.FAILED)
+        val kept = database.list(source, ReviewStatus.KEPT)
+        val counts = database.counts(source)
         withContext(Dispatchers.Main) {
-            if (clearUndo) reviewHistory.clear()
+            if (clearUndo) reviewHistory.getValue(source).clear()
             _uiState.value = _uiState.value.copy(
                 screen = screen,
                 deck = deck,
@@ -346,6 +433,23 @@ class PhotoSweepViewModel(
             for (index in 0 until array.length()) {
                 array.optString(index).takeIf(String::isNotBlank)?.let(::add)
             }
+        }
+    }
+
+    private fun hasLocalAccess(): Boolean {
+        val context = getApplication<Application>()
+        return when {
+            Build.VERSION.SDK_INT >= 34 -> listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            ).any { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+            Build.VERSION.SDK_INT >= 33 -> listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO
+            ).any { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+            else -> context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
         }
     }
 }

@@ -26,8 +26,8 @@ android {
         applicationId = "com.josh.photosweep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.2.2"
+        versionCode = 5
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -98,6 +98,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.10.1")
     implementation("androidx.media3:media3-ui:1.10.1")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
+    implementation("io.coil-kt.coil3:coil-video:3.5.0")
     implementation("org.mozilla.geckoview:geckoview:153.0.20260715202819")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

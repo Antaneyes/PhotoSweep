@@ -3,6 +3,8 @@
 PhotoSweep es una aplicación Android experimental y de código abierto para
 revisar una fototeca de Google Photos con una interacción de tarjetas: deslizar
 para conservar o añadir a una cesta y confirmar después su envío a la papelera.
+También puede revisar de forma independiente las fotos y vídeos almacenados en
+la galería del dispositivo.
 
 Requiere Android 8.0 o posterior.
 
@@ -15,6 +17,8 @@ Requiere Android 8.0 o posterior.
 ## Características
 
 - Inicio de sesión de Google dentro de un perfil aislado de GeckoView.
+- Selector independiente entre Google Photos y la galería del dispositivo.
+- Indexación local mediante MediaStore, sin cuenta ni conexión a Internet.
 - El navegador permanece oculto después de autenticar la cuenta.
 - Indexación paginada de toda la fototeca de Google Photos.
 - Mazo de hasta 10.000 elementos pendientes, seleccionado aleatoriamente en
@@ -29,6 +33,8 @@ Requiere Android 8.0 o posterior.
   queda reservado para el swipe.
 - Reproducción de vídeos con Media3 ExoPlayer, sonido, controles y bucle.
 - Cesta persistente con confirmación doble antes de modificar Google Photos.
+- Papelera nativa de Android 11 o posterior y aviso de borrado definitivo en
+  Android 8–10.
 - Galerías de Cesta y Conservadas accesibles desde la pantalla principal.
 - Visor a pantalla completa con navegación horizontal entre fotos y vídeos.
 - Miniaturas autenticadas con cola, caché y reintentos.
@@ -44,6 +50,10 @@ Google, el índice y las decisiones se guardan en el almacenamiento privado de l
 aplicación y las copias de seguridad de Android están desactivadas. Las
 credenciales se introducen directamente en la página de Google cargada por
 GeckoView; el código de PhotoSweep no las recibe ni las almacena.
+
+En el modo **Este dispositivo**, las fotos y vídeos se leen directamente desde
+la galería mediante MediaStore. No se suben a ningún servidor. Android puede
+conceder acceso completo o limitado a elementos seleccionados.
 
 El navegador interno usa modo escritorio porque la integración depende de la
 web completa de Google Photos. Por ello, Google puede mostrar una alerta de
@@ -64,6 +74,11 @@ correcta:
 
 La aplicación nunca vacía la papelera.
 
+En la galería local, Android 11 o posterior muestra su propio diálogo y mueve
+los elementos a la papelera del dispositivo. Android 8–10 no ofrece esta
+operación estándar, por lo que PhotoSweep advierte antes de borrarlos
+definitivamente.
+
 ## Arquitectura
 
 - **Kotlin + Jetpack Compose** para toda la interfaz nativa.
@@ -71,6 +86,7 @@ La aplicación nunca vacía la papelera.
 - **WebExtension integrada** en `app/src/main/assets/photosweep` para comunicarse
   con Google Photos desde el contexto autenticado.
 - **SQLite** mediante `MediaDatabase` para el índice y los estados locales.
+- **MediaStore** para la galería del dispositivo y su papelera nativa.
 - **Media3 ExoPlayer** para la reproducción de vídeo.
 - **Coil 3** para mostrar las miniaturas entregadas por el puente autenticado.
 

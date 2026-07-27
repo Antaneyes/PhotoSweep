@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.security.MessageDigest
 
 class MediaDatabase(context: Context) :
-    SQLiteOpenHelper(context, "photosweep.db", null, 1) {
+    SQLiteOpenHelper(context, "photosweep.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -23,14 +23,26 @@ class MediaDatabase(context: Context) :
                 duration_ms INTEGER NOT NULL,
                 shuffle_rank INTEGER NOT NULL,
                 status INTEGER NOT NULL DEFAULT 0,
-                stream_url TEXT
+                stream_url TEXT,
+                source INTEGER NOT NULL DEFAULT 0,
+                content_uri TEXT,
+                mime_type TEXT,
+                available INTEGER NOT NULL DEFAULT 1
             )
             """.trimIndent()
         )
-        db.execSQL("CREATE INDEX idx_media_status_rank ON media(status, shuffle_rank)")
+        db.execSQL("CREATE INDEX idx_media_source_status_rank ON media(source, status, available, shuffle_rank)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE media ADD COLUMN source INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE media ADD COLUMN content_uri TEXT")
+            db.execSQL("ALTER TABLE media ADD COLUMN mime_type TEXT")
+            db.execSQL("ALTER TABLE media ADD COLUMN available INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("CREATE INDEX idx_media_source_status_rank ON media(source, status, available, shuffle_rank)")
+        }
+    }
 
     fun upsert(items: List<MediaItem>) {
         writableDatabase.beginTransaction()
@@ -45,6 +57,10 @@ class MediaDatabase(context: Context) :
                     put("timestamp", item.timestamp)
                     put("duration_ms", item.durationMs)
                     put("shuffle_rank", item.shuffleRank)
+                    put("source", item.source.value)
+                    put("content_uri", item.contentUri)
+                    put("mime_type", item.mimeType)
+                    put("available", if (item.available) 1 else 0)
                 }
                 writableDatabase.insertWithOnConflict(
                     "media",
@@ -52,6 +68,23 @@ class MediaDatabase(context: Context) :
                     values,
                     SQLiteDatabase.CONFLICT_IGNORE
                 )
+                if (item.source == MediaSource.DEVICE) {
+                    writableDatabase.update(
+                        "media",
+                        ContentValues().apply {
+                            put("thumbnail_url", item.thumbnailUrl)
+                            put("width", item.width)
+                            put("height", item.height)
+                            put("timestamp", item.timestamp)
+                            put("duration_ms", item.durationMs)
+                            put("content_uri", item.contentUri)
+                            put("mime_type", item.mimeType)
+                            put("available", 1)
+                        },
+                        "media_key = ?",
+                        arrayOf(item.mediaKey)
+                    )
+                }
             }
             writableDatabase.setTransactionSuccessful()
         } finally {
@@ -59,13 +92,13 @@ class MediaDatabase(context: Context) :
         }
     }
 
-    fun list(status: ReviewStatus, limit: Int = 10_000): List<MediaItem> {
+    fun list(source: MediaSource, status: ReviewStatus, limit: Int = 10_000): List<MediaItem> {
         val result = mutableListOf<MediaItem>()
         readableDatabase.query(
             "media",
             COLUMNS,
-            "status = ?",
-            arrayOf(status.value.toString()),
+            "source = ? AND status = ? AND available = 1",
+            arrayOf(source.value.toString(), status.value.toString()),
             null,
             null,
             "shuffle_rank ASC",
@@ -76,13 +109,13 @@ class MediaDatabase(context: Context) :
         return result
     }
 
-    fun randomList(status: ReviewStatus, limit: Int = 10_000): List<MediaItem> {
+    fun randomList(source: MediaSource, status: ReviewStatus, limit: Int = 10_000): List<MediaItem> {
         val result = mutableListOf<MediaItem>()
         readableDatabase.query(
             "media",
             COLUMNS,
-            "status = ?",
-            arrayOf(status.value.toString()),
+            "source = ? AND status = ? AND available = 1",
+            arrayOf(source.value.toString(), status.value.toString()),
             null,
             null,
             "RANDOM()",
@@ -121,17 +154,26 @@ class MediaDatabase(context: Context) :
         )
     }
 
-    fun counts(): Map<ReviewStatus, Int> = ReviewStatus.entries.associateWith { status ->
+    fun counts(source: MediaSource): Map<ReviewStatus, Int> = ReviewStatus.entries.associateWith { status ->
         readableDatabase.rawQuery(
-            "SELECT COUNT(*) FROM media WHERE status = ?",
-            arrayOf(status.value.toString())
+            "SELECT COUNT(*) FROM media WHERE source = ? AND status = ? AND available = 1",
+            arrayOf(source.value.toString(), status.value.toString())
         ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
     }
 
-    fun resetHistory() {
+    fun resetHistory(source: MediaSource) {
         writableDatabase.execSQL(
-            "UPDATE media SET status = ? WHERE status IN (?, ?)",
-            arrayOf(ReviewStatus.UNSEEN.value, ReviewStatus.KEPT.value, ReviewStatus.FAILED.value)
+            "UPDATE media SET status = ? WHERE source = ? AND status IN (?, ?)",
+            arrayOf(ReviewStatus.UNSEEN.value, source.value, ReviewStatus.KEPT.value, ReviewStatus.FAILED.value)
+        )
+    }
+
+    fun markSourceUnavailable(source: MediaSource) {
+        writableDatabase.update(
+            "media",
+            ContentValues().apply { put("available", 0) },
+            "source = ?",
+            arrayOf(source.value.toString())
         )
     }
 
@@ -145,13 +187,18 @@ class MediaDatabase(context: Context) :
         durationMs = getLong(6),
         shuffleRank = getLong(7),
         status = ReviewStatus.from(getInt(8)),
-        streamUrl = getString(9)
+        streamUrl = getString(9),
+        source = MediaSource.from(getInt(10)),
+        contentUri = getString(11),
+        mimeType = getString(12),
+        available = getInt(13) != 0
     )
 
     companion object {
         private val COLUMNS = arrayOf(
             "media_key", "dedup_key", "thumbnail_url", "width", "height",
-            "timestamp", "duration_ms", "shuffle_rank", "status", "stream_url"
+            "timestamp", "duration_ms", "shuffle_rank", "status", "stream_url",
+            "source", "content_uri", "mime_type", "available"
         )
 
         fun shuffleRank(mediaKey: String): Long {
